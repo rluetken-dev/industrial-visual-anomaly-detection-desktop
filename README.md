@@ -32,7 +32,17 @@ Available capabilities include:
 
 The Release solution builds successfully. Normal and anomalous capsule images have both been verified end to end through the WPF client, ASP.NET Core backend, Python inference service, and exported model artifact.
 
-CI is configured and verified. Final screenshots and release preparation remain open. See [Development Status](docs/DevelopmentStatus.md) for the detailed verified state.
+CI is configured and verified. Release screenshots are included. Final release preparation remains open. See [Development Status](docs/DevelopmentStatus.md) for the detailed verified state.
+
+## Screenshots
+
+### Normal analysis
+
+![Normal capsule analysis](docs/screenshots/analysis-normal.png)
+
+### Anomalous analysis
+
+![Anomalous capsule analysis](docs/screenshots/analysis-anomalous.png)
 
 ## Application Workflow
 
@@ -114,6 +124,9 @@ industrial-visual-anomaly-detection-desktop/
 |-- tests/
 |   `-- IndustrialVisualAnomalyDetection.Desktop.Tests/
 |-- docs/
+|   |-- screenshots/
+|   |   |-- analysis-anomalous.png
+|   |   `-- analysis-normal.png
 |   |-- ApiIntegration.md
 |   |-- ArchitectureOverview.md
 |   |-- DevelopmentStatus.md

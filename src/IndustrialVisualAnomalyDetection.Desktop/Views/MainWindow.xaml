@@ -16,13 +16,19 @@
         </Grid.RowDefinitions>
 
         <!-- Application header -->
-        <Grid Grid.Row="0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+        <Border Grid.Row="0"
+                Padding="20"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0">
+                <StackPanel Grid.Column="0">
                 <StackPanel Orientation="Horizontal">
                     <Border Width="5"
                             Height="34"
@@ -72,8 +78,9 @@
                 <Button Margin="12,0,0,0"
                         Command="{Binding RefreshHealthCommand}"
                         Content="Refresh status" />
-            </StackPanel>
-        </Grid>
+                </StackPanel>
+            </Grid>
+        </Border>
 
         <!-- Primary workflow -->
         <Grid Grid.Row="1" Margin="0,28,0,24">
@@ -312,7 +319,7 @@
                            Text="https://localhost:7056" />
                 <TextBlock Grid.Column="2"
                            Style="{StaticResource MutedTextStyle}"
-                           Text="Desktop foundation" />
+                           Text="Analysis client" />
             </Grid>
         </Border>
     </Grid>

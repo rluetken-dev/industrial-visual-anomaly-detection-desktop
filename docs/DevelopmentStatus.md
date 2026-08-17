@@ -10,7 +10,7 @@ It is intentionally concise. Stable scope belongs in `ProjectSpecification.md`, 
 
 **Phase 3 - Repository and release preparation**
 
-The current objective is to complete screenshots and final release evidence for the verified desktop baseline before optional visualization features are introduced.
+The current objective is to complete final verification and release preparation for the verified desktop baseline before optional visualization features are introduced.
 
 ## Verified Environment
 
@@ -39,7 +39,10 @@ The current objective is to complete screenshots and final release evidence for 
 - initial README, specification, architecture, status, integration, and commit-guideline documents created;
 - initial feature baseline committed and pushed to the remote GitHub repository;
 - GitHub Actions CI configured for Windows, .NET 10, Release build, and automated tests;
-- CI status and technology badges added to the README.
+- CI status and technology badges added to the README;
+- normal and anomalous release screenshots captured;
+- release screenshots stored under `docs/screenshots`;
+- release screenshots referenced from the README.
 
 ### Application composition
 
@@ -102,6 +105,9 @@ industrial-visual-anomaly-detection-desktop/
 |   `-- IndustrialVisualAnomalyDetection.Desktop.Tests/
 |       `-- Unit/
 |-- docs/
+|   |-- screenshots/
+|   |   |-- analysis-anomalous.png
+|   |   `-- analysis-normal.png
 |   |-- ApiIntegration.md
 |   |-- ArchitectureOverview.md
 |   |-- DevelopmentStatus.md
@@ -119,7 +125,7 @@ industrial-visual-anomaly-detection-desktop/
 - structured operational logging beyond Generic Host defaults;
 - detailed Problem Details parsing and presentation;
 - dedicated packaging or installer workflow;
-- release screenshots and public repository preparation;
+- public repository and release preparation;
 - heatmap display;
 - analysis history or persistence;
 - batch analysis;
@@ -141,11 +147,9 @@ industrial-visual-anomaly-detection-desktop/
 
 ## Immediate Next Steps
 
-1. add screenshots of the verified normal and anomalous workflows;
-2. reference the screenshots from the README;
-3. verify startup, failure, cancellation, normal, and anomalous workflows once more before release;
-4. complete public repository and first-release preparation;
-5. evaluate heatmap transport and display as the next optional feature milestone.
+1. verify startup, failure, cancellation, normal, and anomalous workflows once more before release;
+2. complete public repository and first-release preparation;
+3. evaluate heatmap transport and display as the next optional feature milestone.
 
 ## Verification Commands
 
