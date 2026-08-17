@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/IndustrialVisualAnomalyDetection.Desktop/IndustrialVisualAnomalyDetection.Desktop.csproj" />
+  <Project Path="tests/IndustrialVisualAnomalyDetection.Desktop.Tests/IndustrialVisualAnomalyDetection.Desktop.Tests.csproj" Id="b4a08803-8c4f-4868-9daf-2bd2b6d65026" />
+</Solution>
