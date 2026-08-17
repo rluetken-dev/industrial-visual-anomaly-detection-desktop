@@ -178,13 +178,12 @@ The initial desktop baseline is complete when:
 
 ## Acceptance Status
 
-The application workflow, backend communication, health reporting, image selection and preview, cancellation behavior, result rendering, automated tests, and full-stack execution have been verified.
+The application workflow, backend communication, health reporting, image selection and preview, cancellation behavior, result rendering, automated tests, full-stack execution, GitHub Actions CI, and README setup instructions have been verified.
 
 The remaining acceptance work is repository-level completion:
 
-- add and verify the GitHub Actions CI workflow;
-- finalize README setup instructions;
 - add screenshots of the verified application state;
+- reference the screenshots from the README;
 - prepare the first public release when the repository is ready.
 
 ## Repository Boundary
@@ -209,7 +208,7 @@ The initial WPF analysis workflow is implemented and verified. The application s
 
 The complete Release solution builds successfully, and all 35 automated tests pass. End-to-end analysis has been verified against the ASP.NET Core backend, Python inference service, and exported capsule model artifact.
 
-CI, final README evidence, screenshots, and release preparation remain open.
+CI and README setup instructions are verified. Screenshots and release preparation remain open.
 
 ## Last Updated
 

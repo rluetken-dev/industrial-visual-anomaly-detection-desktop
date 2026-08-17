@@ -8,9 +8,9 @@ It is intentionally concise. Stable scope belongs in `ProjectSpecification.md`, 
 
 ## Current Phase
 
-**Phase 2 - Initial analysis workflow complete**
+**Phase 3 - Repository and release preparation**
 
-The current objective is to stabilize the verified desktop baseline, add repository automation, and prepare the project for its first public release before optional visualization features are introduced.
+The current objective is to complete screenshots and final release evidence for the verified desktop baseline before optional visualization features are introduced.
 
 ## Verified Environment
 
@@ -24,7 +24,8 @@ The current objective is to stabilize the verified desktop baseline, add reposit
 - the complete solution builds successfully in Debug and Release configurations;
 - all 35 automated tests pass;
 - the WPF application starts and performs an automatic backend health check;
-- the full desktop-to-backend-to-Python inference workflow has been verified locally.
+- the full desktop-to-backend-to-Python inference workflow has been verified locally;
+- the GitHub Actions Release build and test workflow completes successfully.
 
 ## Implemented
 
@@ -35,7 +36,10 @@ The current objective is to stabilize the verified desktop baseline, add reposit
 - WPF application project created under `src`;
 - xUnit test project created under `tests`;
 - repository hygiene configured through `.gitignore`, `.gitattributes`, and `.editorconfig`;
-- initial README, specification, architecture, status, integration, and commit-guideline documents created.
+- initial README, specification, architecture, status, integration, and commit-guideline documents created;
+- initial feature baseline committed and pushed to the remote GitHub repository;
+- GitHub Actions CI configured for Windows, .NET 10, Release build, and automated tests;
+- CI status and technology badges added to the README.
 
 ### Application composition
 
@@ -83,6 +87,9 @@ The current objective is to stabilize the verified desktop baseline, add reposit
 
 ```text
 industrial-visual-anomaly-detection-desktop/
+|-- .github/
+|   `-- workflows/
+|       `-- ci.yml
 |-- src/
 |   `-- IndustrialVisualAnomalyDetection.Desktop/
 |       |-- Configuration/
@@ -109,7 +116,6 @@ industrial-visual-anomaly-detection-desktop/
 
 ## Not Yet Implemented
 
-- CI workflow;
 - structured operational logging beyond Generic Host defaults;
 - detailed Problem Details parsing and presentation;
 - dedicated packaging or installer workflow;
@@ -135,13 +141,11 @@ industrial-visual-anomaly-detection-desktop/
 
 ## Immediate Next Steps
 
-1. synchronize all repository documentation with the verified baseline;
-2. create the initial commit;
-3. add a GitHub Actions workflow for Release build and tests;
-4. create and publish the remote repository;
-5. add screenshots and release-ready README content;
-6. verify startup, failure, cancellation, normal, and anomalous workflows once more before release;
-7. evaluate heatmap transport and display as the next optional feature milestone.
+1. add screenshots of the verified normal and anomalous workflows;
+2. reference the screenshots from the README;
+3. verify startup, failure, cancellation, normal, and anomalous workflows once more before release;
+4. complete public repository and first-release preparation;
+5. evaluate heatmap transport and display as the next optional feature milestone.
 
 ## Verification Commands
 

@@ -345,7 +345,7 @@ The architecture described in this document is implemented for the initial deskt
 
 The Release solution builds successfully, all 35 automated tests pass, and end-to-end normal and anomalous image analysis has been verified against the real backend and Python inference service.
 
-The current architecture intentionally remains within one production assembly and one test assembly. CI, final repository evidence, and release preparation remain repository-level follow-up work rather than reasons to introduce additional architectural layers.
+The current architecture intentionally remains within one production assembly and one test assembly. The verified CI workflow and the remaining screenshot and release preparation are repository concerns and do not justify additional architectural layers.
 
 ## Documentation Update Rule
 

@@ -32,7 +32,7 @@ Available capabilities include:
 
 The Release solution builds successfully. Normal and anomalous capsule images have both been verified end to end through the WPF client, ASP.NET Core backend, Python inference service, and exported model artifact.
 
-CI, final screenshots, and release preparation remain open. See [Development Status](docs/DevelopmentStatus.md) for the detailed verified state.
+CI is configured and verified. Final screenshots and release preparation remain open. See [Development Status](docs/DevelopmentStatus.md) for the detailed verified state.
 
 ## Application Workflow
 
