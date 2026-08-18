@@ -1,6 +1,7 @@
 # Industrial Visual Anomaly Detection Desktop
 
 [![CI](https://github.com/rluetken-dev/industrial-visual-anomaly-detection-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/rluetken-dev/industrial-visual-anomaly-detection-desktop/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/rluetken-dev/industrial-visual-anomaly-detection-desktop)](https://github.com/rluetken-dev/industrial-visual-anomaly-detection-desktop/releases/latest)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 [![WPF](https://img.shields.io/badge/UI-WPF-0C54C2)](https://learn.microsoft.com/dotnet/desktop/wpf/)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D4)](https://www.microsoft.com/windows)
