@@ -52,7 +52,7 @@ public sealed class BackendImageAnalysisService : IImageAnalysisService
                 JsonOptions,
                 cancellationToken);
 
-        if (backendResponse?.Model is null)
+        if (backendResponse?.Model is null || backendResponse.Heatmap is null)
         {
             throw new InvalidDataException("The backend returned an incomplete analysis response.");
         }
@@ -71,7 +71,12 @@ public sealed class BackendImageAnalysisService : IImageAnalysisService
             backendResponse.Threshold,
             decision,
             backendResponse.ProcessingTimeMs,
-            backendResponse.TraceId);
+            backendResponse.TraceId,
+            new AnalysisHeatmap(
+                backendResponse.Heatmap.ContentType,
+                backendResponse.Heatmap.Width,
+                backendResponse.Heatmap.Height,
+                backendResponse.Heatmap.DataBase64));
     }
 
     private static string GetContentType(string imagePath)
@@ -97,6 +102,8 @@ public sealed class BackendImageAnalysisService : IImageAnalysisService
         public long ProcessingTimeMs { get; init; }
 
         public string TraceId { get; init; } = string.Empty;
+
+        public BackendAnalysisHeatmapResponse? Heatmap { get; init; }
     }
 
     private sealed class BackendAnalysisModelResponse
@@ -104,5 +111,16 @@ public sealed class BackendImageAnalysisService : IImageAnalysisService
         public string Id { get; init; } = string.Empty;
 
         public string Category { get; init; } = string.Empty;
+    }
+
+    private sealed class BackendAnalysisHeatmapResponse
+    {
+        public string ContentType { get; init; } = string.Empty;
+
+        public int Width { get; init; }
+
+        public int Height { get; init; }
+
+        public string DataBase64 { get; init; } = string.Empty;
     }
 }

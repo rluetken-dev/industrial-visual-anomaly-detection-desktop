@@ -9,11 +9,13 @@ public sealed class ImageAnalysisResult
         double threshold,
         AnalysisDecision decision,
         long processingTimeMs,
-        string traceId)
+        string traceId,
+        AnalysisHeatmap heatmap)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         ArgumentException.ThrowIfNullOrWhiteSpace(category);
         ArgumentException.ThrowIfNullOrWhiteSpace(traceId);
+        ArgumentNullException.ThrowIfNull(heatmap);
 
         if (!double.IsFinite(score) || score < 0)
         {
@@ -37,6 +39,7 @@ public sealed class ImageAnalysisResult
         Decision = decision;
         ProcessingTimeMs = processingTimeMs;
         TraceId = traceId;
+        Heatmap = heatmap;
     }
 
     public string ModelId { get; }
@@ -52,4 +55,6 @@ public sealed class ImageAnalysisResult
     public long ProcessingTimeMs { get; }
 
     public string TraceId { get; }
+
+    public AnalysisHeatmap Heatmap { get; }
 }

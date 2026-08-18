@@ -8,16 +8,16 @@
 
 Windows desktop client for the Industrial Visual Anomaly Detection system, built with C#, .NET 10, WPF, and MVVM.
 
-The application provides an operator-facing workflow for selecting an industrial image, previewing it locally, submitting it to the ASP.NET Core backend, and inspecting the returned anomaly-detection result.
+The application provides an operator-facing workflow for selecting an industrial image, previewing it locally, submitting it to the ASP.NET Core backend, inspecting the returned anomaly-detection result, and reviewing an interactive anomaly-heatmap overlay.
 
 ## Current Status
 
-The initial desktop analysis workflow is implemented and verified.
+The desktop analysis workflow, including interactive heatmap visualization, is implemented and verified.
 
 Available capabilities include:
 
 - automatic and manual backend health checks;
-- separate backend liveness and inference-readiness indicators;
+- separate backend-liveness and inference-readiness indicators;
 - local PNG and JPEG file selection;
 - image preview without retaining an unnecessary source-file lock;
 - multipart image analysis through the ASP.NET Core backend;
@@ -26,24 +26,28 @@ Available capabilities include:
 - normal and anomalous decision presentation;
 - anomaly score and threshold display;
 - model identifier, category, processing time, and trace identifier display;
-- user-facing timeout, connectivity, validation, and service failure states;
+- validated PNG heatmap response mapping;
+- Base64 heatmap decoding into an immutable WPF image;
+- aligned source-image and heatmap overlay;
+- heatmap visibility control and adjustable opacity;
+- user-facing timeout, connectivity, validation, and service-failure states;
 - validated backend configuration;
 - centralized WPF styling;
-- 35 passing automated tests.
+- 49 passing automated tests.
 
-The Release solution builds successfully. Normal and anomalous capsule images have both been verified end to end through the WPF client, ASP.NET Core backend, Python inference service, and exported model artifact.
+The Release solution builds successfully. Normal and anomalous capsule images have both been verified end to end through the WPF client, ASP.NET Core backend, Python inference service, and exported model artifact. The returned `320 x 320` PNG heatmaps were verified in the desktop overlay with a default opacity of 40 percent.
 
-CI is configured and verified. Release screenshots are included. Final release preparation remains open. See [Development Status](docs/DevelopmentStatus.md) for the detailed verified state.
+CI is configured and verified. Version `v0.1.0` records the initial desktop analysis workflow. The heatmap-overlay milestone is implemented on `main` and is intended for the next release. See [Development Status](docs/DevelopmentStatus.md) for the detailed verified state.
 
 ## Screenshots
 
-### Normal analysis
+### Normal analysis with heatmap overlay
 
-![Normal capsule analysis](docs/screenshots/analysis-normal.png)
+![Normal capsule analysis with heatmap overlay](docs/screenshots/analysis-normal.png)
 
-### Anomalous analysis
+### Anomalous analysis with heatmap overlay
 
-![Anomalous capsule analysis](docs/screenshots/analysis-anomalous.png)
+![Anomalous capsule analysis with heatmap overlay](docs/screenshots/analysis-anomalous.png)
 
 ## Application Workflow
 
@@ -52,9 +56,11 @@ CI is configured and verified. Release screenshots are included. Final release p
 3. Start the WPF desktop application.
 4. Confirm that backend liveness and inference readiness are green.
 5. Select a local PNG or JPEG image.
-6. Inspect the image preview.
+6. Inspect the local image preview.
 7. Start the analysis.
 8. Inspect the backend decision and supporting result values.
+9. Review the aligned anomaly-heatmap overlay.
+10. Toggle the heatmap or adjust its opacity when comparing it with the source image.
 
 The application performs an initial status refresh after startup. A manual **Refresh status** action is also available.
 
@@ -64,6 +70,7 @@ The application performs an initial status refresh after startup. A manual **Ref
 WPF desktop application
         |
         | HTTPS, multipart form data and JSON
+        | Receives decision data and Base64 PNG heatmap
         v
 ASP.NET Core backend
         |
@@ -75,7 +82,7 @@ Python inference service
 Exported anomaly-detection model artifact
 ```
 
-The desktop application communicates only with the ASP.NET Core backend. It does not invoke Python directly and does not load model artifacts.
+The desktop application communicates only with the ASP.NET Core backend. It does not invoke Python directly, load model artifacts, or access raw model tensors.
 
 ## Technology Stack
 
@@ -132,10 +139,14 @@ industrial-visual-anomaly-detection-desktop/
 |   |-- ArchitectureOverview.md
 |   |-- DevelopmentStatus.md
 |   `-- ProjectSpecification.md
+|-- .github/
+|   `-- workflows/
+|       `-- ci.yml
 |-- .editorconfig
 |-- .gitattributes
 |-- .gitignore
 |-- COMMITS.md
+|-- README.md
 `-- IndustrialVisualAnomalyDetection.Desktop.slnx
 ```
 
@@ -265,15 +276,18 @@ dotnet test .\IndustrialVisualAnomalyDetection.Desktop.slnx `
     --no-build
 ```
 
-The current suite contains 35 tests covering:
+The current suite contains 49 tests covering:
 
 - backend configuration validation;
 - backend liveness and readiness mapping;
 - HTTP timeout and unavailable states;
 - multipart analysis requests;
 - normal and anomalous response mapping;
+- required heatmap-contract mapping;
+- heatmap model invariants and Base64 validation;
+- PNG decoding into immutable WPF image sources;
 - invalid response handling;
-- view-model health and analysis state transitions;
+- view-model health, analysis, and heatmap state transitions;
 - command availability and cancellation.
 
 ## Backend Integration
@@ -284,7 +298,9 @@ The desktop client consumes:
 - `GET /health/ready`;
 - `POST /api/v1/analyses`.
 
-Image analysis uses multipart form data with the field name `image`. The backend response supplies the authoritative decision together with score, threshold, model information, processing time, and trace identifier.
+Image analysis uses multipart form data with the field name `image`. The backend response supplies the authoritative decision together with score, threshold, model information, processing time, trace identifier, and a required `image/png` heatmap encoded as Base64.
+
+The desktop client validates the heatmap metadata, decodes the PNG into an immutable WPF image, and overlays it on the source preview. Heatmap visibility and opacity are presentation-only controls and do not change the backend decision or anomaly score.
 
 See [API Integration](docs/ApiIntegration.md) for the complete consumed contract and verified behavior.
 
@@ -292,18 +308,19 @@ See [API Integration](docs/ApiIntegration.md) for the complete consumed contract
 
 The full local stack has been verified with the exported `mvtec-ad-capsule-320` artifact:
 
-| Image | Score | Threshold | Decision |
-| --- | ---: | ---: | --- |
-| Capsule `test/good/000.png` | `1.848755` | `2.501822` | Normal |
-| Capsule `test/poke/000.png` | `4.992109` | `2.501822` | Anomalous |
+| Image | Score | Threshold | Decision | Heatmap |
+| --- | ---: | ---: | --- | --- |
+| Capsule `test/good/000.png` | `1.848755` | `2.501822` | Normal | `320 x 320` PNG overlay |
+| Capsule `test/poke/000.png` | `4.992109` | `2.501822` | Anomalous | `320 x 320` PNG overlay |
 
-These examples verify the desktop integration and presentation workflow. They are not a new model benchmark.
+These examples verify desktop integration, heatmap transport, decoding, alignment, and presentation. They are not a new model benchmark. A heatmap visualizes relative patch responses and must not be interpreted as a certified defect-segmentation mask.
 
 ## Deferred Scope
 
 The following capabilities remain intentionally deferred:
 
-- anomaly heatmap display;
+- certified defect segmentation or pixel-accurate masks;
+- generalized overlay alignment for preprocessing pipelines that crop or change aspect ratio;
 - analysis history and persistence;
 - batch image processing;
 - camera integration;
@@ -311,7 +328,7 @@ The following capabilities remain intentionally deferred:
 - authentication;
 - installer packaging and automatic updates.
 
-Heatmaps require a future contract extension through the Python service and backend. The desktop client will not access model tensors or artifacts directly.
+The desktop client will continue to consume visualization output through the backend contract. It will not access model tensors or artifacts directly.
 
 ## Documentation
 
@@ -328,12 +345,14 @@ Documentation is updated after verified milestones or meaningful groups of chang
 This repository must not contain:
 
 - MVTec datasets;
-- uploaded industrial images;
+- raw uploaded industrial images;
 - model artifacts;
-- generated heatmaps or analysis output;
+- standalone generated heatmaps or raw analysis output;
 - local logs;
 - machine-specific configuration;
 - credentials or secrets.
+
+Documented application screenshots under `docs/screenshots` are the intentional exception for portfolio presentation. They show the user interface and verified workflow rather than distributing source datasets or reusable model artifacts.
 
 ## License
 

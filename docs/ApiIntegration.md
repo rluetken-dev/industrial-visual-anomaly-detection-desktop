@@ -14,6 +14,7 @@ The desktop application communicates only with the ASP.NET Core backend.
 WPF desktop client
         |
         | HTTPS, multipart form data, JSON and Problem Details
+        | Receives decision metadata and Base64 PNG heatmap
         v
 ASP.NET Core backend
 ```
@@ -24,6 +25,7 @@ The desktop application must not:
 - load model artifacts;
 - reproduce backend image-signature validation;
 - calculate the authoritative anomaly decision;
+- generate heatmaps from model data;
 - assume access to backend or model filesystem paths.
 
 ## Client Components
@@ -31,9 +33,11 @@ The desktop application must not:
 Backend communication is isolated behind two application-facing service interfaces:
 
 - `IBackendHealthService`, implemented by `BackendHealthService`, handles liveness and readiness;
-- `IImageAnalysisService`, implemented by `BackendImageAnalysisService`, handles multipart image analysis.
+- `IImageAnalysisService`, implemented by `BackendImageAnalysisService`, handles multipart image analysis and maps the required heatmap contract.
 
-Both implementations receive configured `HttpClient` instances through typed `IHttpClientFactory` registrations. `MainWindowViewModel` depends only on the service interfaces and does not construct HTTP requests or deserialize transport responses.
+Heatmap decoding is isolated behind `IHeatmapImageLoader`, implemented by `HeatmapImageLoader`.
+
+The HTTP implementations receive configured `HttpClient` instances through typed `IHttpClientFactory` registrations. `MainWindowViewModel` depends only on service interfaces and does not construct HTTP requests, deserialize transport responses, or decode Base64 data directly.
 
 ## Local Development Address
 
@@ -54,7 +58,7 @@ The desktop client uses:
 | --- | --- | --- |
 | `GET` | `/health/live` | Verify that the backend process responds. |
 | `GET` | `/health/ready` | Verify that the backend and configured inference service are ready. |
-| `POST` | `/api/v1/analyses` | Submit one image for anomaly analysis. |
+| `POST` | `/api/v1/analyses` | Submit one image and receive decision data with a heatmap. |
 
 The desktop client does not call the backend OpenAPI document during normal operation.
 
@@ -121,7 +125,7 @@ Each health indicator supports:
 - available after a successful response with the expected status;
 - unavailable after timeout, connectivity failure, or an unavailable response.
 
-Continuous polling is not part of the initial implementation.
+Continuous polling is not part of the current implementation.
 
 ## Image Analysis
 
@@ -152,7 +156,7 @@ The request stream and multipart content are disposed after the operation. The c
 
 Status: `200 OK`
 
-Example:
+Example with shortened Base64 data:
 
 ```json
 {
@@ -163,26 +167,78 @@ Example:
   "score": 4.992109298706055,
   "threshold": 2.501821517944336,
   "decision": "anomalous",
-  "processingTimeMs": 1692,
-  "traceId": "0HNNQ2F8C9UQT:00000001"
+  "processingTimeMs": 1590,
+  "traceId": "0HNNT0HA0EGDN:00000001",
+  "heatmap": {
+    "contentType": "image/png",
+    "width": 320,
+    "height": 320,
+    "dataBase64": "iVBORw0KGgoAAA..."
+  }
 }
 ```
 
+The shortened `dataBase64` value above is illustrative. A real successful response contains the complete Base64-encoded PNG payload.
+
 ### Response Fields
 
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `model.id` | string | Identifier of the model configuration used for inference. |
-| `model.category` | string | Industrial object category handled by the model. |
-| `score` | number | Aggregated anomaly score. |
-| `threshold` | number | Decision threshold selected during model export. |
-| `decision` | string | Authoritative backend decision, currently `normal` or `anomalous`. |
-| `processingTimeMs` | integer | Backend-measured processing duration in milliseconds. |
-| `traceId` | string | Backend request trace identifier for diagnostics. |
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `model.id` | string | yes | Identifier of the model configuration used for inference. |
+| `model.category` | string | yes | Industrial object category handled by the model. |
+| `score` | number | yes | Aggregated anomaly score. |
+| `threshold` | number | yes | Decision threshold selected during model export. |
+| `decision` | string | yes | Authoritative backend decision, currently `normal` or `anomalous`. |
+| `processingTimeMs` | integer | yes | Backend-measured processing duration in milliseconds. |
+| `traceId` | string | yes | Backend request trace identifier for diagnostics. |
+| `heatmap.contentType` | string | yes | Heatmap media type; currently required to be `image/png`. |
+| `heatmap.width` | integer | yes | Positive heatmap width in pixels. |
+| `heatmap.height` | integer | yes | Positive heatmap height in pixels. |
+| `heatmap.dataBase64` | string | yes | Complete Base64-encoded PNG heatmap data. |
 
-`BackendImageAnalysisService` validates and maps the response into `ImageAnalysisResult`. The view model displays the supplied decision and supporting values without recalculating the decision from score and threshold.
+`BackendImageAnalysisService` validates and maps the response into `ImageAnalysisResult` and its required `AnalysisHeatmap`. The view model displays the supplied decision and supporting values without recalculating the decision from score and threshold.
 
-The client tolerates unknown additional response properties to allow compatible backend evolution.
+The client tolerates unknown additional response properties to allow compatible backend evolution. Missing or invalid required fields cause the response to be rejected.
+
+## Heatmap Contract and Mapping
+
+The heatmap is part of every successful analysis response in the current contract.
+
+The desktop validates that:
+
+- the heatmap object is present;
+- `contentType` is `image/png`, compared case-insensitively;
+- `width` is greater than zero;
+- `height` is greater than zero;
+- `dataBase64` is not empty;
+- `dataBase64` is syntactically valid Base64;
+- the decoded bytes can be loaded as a WPF image.
+
+The mapping and presentation sequence is:
+
+```text
+Backend JSON response
+  -> private transport response types
+  -> AnalysisHeatmap validation
+  -> ImageAnalysisResult
+  -> IHeatmapImageLoader
+  -> immutable WPF ImageSource
+  -> aligned overlay in MainWindow
+```
+
+`HeatmapImageLoader` decodes the payload through an in-memory stream, loads the complete bitmap using `BitmapCacheOption.OnLoad`, and freezes the resulting image. The returned `ImageSource` therefore does not depend on a response stream that has already been disposed.
+
+Heatmap visibility and opacity are local presentation controls. They do not cause another backend request and do not change the decision, score, threshold, or trace identifier.
+
+## Spatial Alignment Assumption
+
+The current client overlays the source image and heatmap using the same layout bounds and `Uniform` scaling.
+
+This is correct for the verified pipeline because the returned `320 x 320` heatmap represents the same spatial extent and aspect ratio as the source preview after the current resize-based preprocessing flow.
+
+If a future model pipeline crops the image, pads it asymmetrically, or changes aspect ratio, the backend contract must expose sufficient transform metadata before the desktop can claim generalized alignment.
+
+The heatmap visualizes relative patch responses. It is not a certified or pixel-accurate defect-segmentation mask.
 
 ## Verified Upload Rules
 
@@ -244,6 +300,8 @@ The desktop client distinguishes presentation for:
 - HTTP timeout;
 - connection failure;
 - malformed or incompatible success response;
+- missing or invalid heatmap metadata;
+- invalid Base64 or undecodable PNG heatmap data;
 - unexpected HTTP failure.
 
 Expected failures become clear view-model state rather than unhandled exceptions. Commands and busy state are restored after failure or cancellation.
@@ -256,11 +314,11 @@ The backend creates the authoritative trace identifier for each request. The des
 - displays it with the completed result for diagnostics;
 - does not invent a replacement that could be mistaken for the backend trace identifier.
 
-Trace information from future richer Problem Details mapping should be preserved where available. The desktop does not send its own correlation header in the initial version.
+Trace information from future richer Problem Details mapping should be preserved where available. The desktop does not send its own correlation header in the current version.
 
 ## Timeouts and Cancellation
 
-The backend timeout is configured through `BackendOptions.TimeoutSeconds`. The same configured client boundary covers health and image-analysis calls.
+The backend timeout is configured through `BackendOptions.TimeoutSeconds`. The configured typed client boundary covers health and image-analysis calls.
 
 Cancellation is propagated to the HTTP operation. The view model owns a cancellation source for the active analysis and exposes an explicit cancel command.
 
@@ -281,6 +339,7 @@ Response handling:
 - validates required nested and scalar values;
 - rejects unsupported decisions;
 - rejects missing or incompatible result data;
+- rejects missing or invalid heatmap data;
 - maps valid transport data into `ImageAnalysisResult` before updating UI state.
 
 Partially valid transport data is not exposed as a successful result.
@@ -306,12 +365,16 @@ Current automated coverage includes:
 - unavailable and timeout health behavior;
 - multipart image request construction;
 - successful normal and anomalous response mapping;
+- required heatmap-object mapping;
+- missing and invalid heatmap rejection;
+- heatmap model invariants and Base64 validation;
+- PNG decoding into immutable WPF image sources;
 - invalid or incomplete response rejection;
 - non-success response handling;
 - cancellation and transport failures;
-- view-model analysis and health state transitions.
+- view-model analysis, health, and heatmap state transitions.
 
-The complete desktop suite currently contains 35 passing tests.
+The complete desktop suite currently contains 49 passing tests.
 
 ## Local Verification
 
@@ -327,17 +390,32 @@ Readiness can be checked with:
 curl.exe --insecure https://localhost:7056/health/ready
 ```
 
-An image can be submitted with:
+An image can be submitted and the JSON response saved with:
 
 ```powershell
 curl.exe `
     --insecure `
     -X POST `
     https://localhost:7056/api/v1/analyses `
-    -F "image=@C:\path\to\image.png;type=image/png"
+    -F "image=@C:\path\to\image.png;type=image/png" `
+    --output .\outputs\analysis-response.json
+```
+
+The returned heatmap can be decoded for manual inspection with:
+
+```powershell
+$response = Get-Content -Raw .\outputs\analysis-response.json |
+    ConvertFrom-Json
+
+[System.IO.File]::WriteAllBytes(
+    "$PWD\outputs\heatmap-check.png",
+    [Convert]::FromBase64String($response.heatmap.dataBase64)
+)
 ```
 
 `--insecure` is acceptable only for this manual local command when the development certificate is not trusted. The desktop application itself does not disable certificate validation.
+
+Local response files and decoded heatmaps under `outputs` are verification artifacts and shall not be committed.
 
 ## Verified End-to-End Results
 
@@ -345,33 +423,36 @@ The complete local chain has been verified with the Python inference service, AS
 
 Verified examples using the exported `mvtec-ad-capsule-320` artifact:
 
-| Image | Score | Threshold | Decision |
-| --- | ---: | ---: | --- |
-| Capsule `test/good/000.png` | `1.848755` | `2.501822` | `normal` |
-| Capsule `test/poke/000.png` | `4.992109` | `2.501822` | `anomalous` |
+| Image | Score | Threshold | Decision | Heatmap |
+| --- | ---: | ---: | --- | --- |
+| Capsule `test/good/000.png` | `1.848755` | `2.501822` | `normal` | `320 x 320` PNG overlay |
+| Capsule `test/poke/000.png` | `4.992109` | `2.501822` | `anomalous` | `320 x 320` PNG overlay |
 
-The desktop displayed model identifier, category, processing duration, trace identifier, and the authoritative backend decision for both requests.
+The desktop displayed model identifier, category, processing duration, trace identifier, authoritative backend decision, and aligned heatmap for both requests.
 
-These examples verify integration behavior; they are not a new model benchmark.
+Overlay visibility and opacity were verified at 0, 40, and 100 percent. The selected default is 40 percent.
+
+These examples verify integration behavior; they are not a new model benchmark or evidence of pixel-accurate segmentation.
 
 ## Future Contract Extensions
 
 Possible later extensions include:
 
-- heatmap availability or a heatmap resource endpoint;
+- transform metadata for crop-aware or aspect-ratio-changing heatmap alignment;
 - richer model metadata;
 - analysis identifiers;
 - analysis history;
 - batch analysis;
-- authentication.
+- authentication;
+- optional versioned visualization formats if measurements justify them.
 
 The desktop client should not implement speculative fields before the backend exposes and verifies them.
 
 ## Current Integration Status
 
-The complete initial integration is implemented and verified. The desktop client performs startup and manual health checks, submits PNG and JPEG images through the backend analysis endpoint, maps valid responses into application models, supports cancellation, and presents successful and failed operations as UI state.
+The complete analysis and heatmap integration is implemented and verified. The desktop client performs startup and manual health checks, submits PNG and JPEG images through the backend analysis endpoint, maps valid responses and required heatmaps into application models, decodes PNG heatmaps, supports cancellation, and presents successful and failed operations as UI state.
 
-Normal and anomalous image requests have both been verified end to end against the real local stack. Heatmap transport and other future contract extensions remain outside the current API integration.
+Normal and anomalous image requests have both been verified end to end against the real local stack. Heatmap transport, validation, decoding, alignment, visibility, and opacity control are part of the current integration rather than future scope.
 
 ## Documentation Update Rule
 
@@ -379,4 +460,4 @@ Update this document when the consumed backend contract or verified desktop inte
 
 ## Last Updated
 
-2026-08-17
+2026-08-18

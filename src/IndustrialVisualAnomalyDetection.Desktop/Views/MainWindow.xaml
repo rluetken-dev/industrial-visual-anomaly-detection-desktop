@@ -124,11 +124,77 @@
                                 Content="Select image" />
                     </Grid>
 
-                    <Border Grid.Row="2" Style="{StaticResource ImageCanvasStyle}">
-                        <Image Margin="12"
-                               Source="{Binding SelectedImagePreview}"
-                               Stretch="Uniform" />
-                    </Border>
+                    <Grid Grid.Row="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource MetricLabelTextStyle}"
+                                       Text="IMAGE OVERLAY" />
+
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <CheckBox VerticalAlignment="Center"
+                                          IsChecked="{Binding IsHeatmapVisible}">
+                                    <TextBlock Style="{StaticResource MutedTextStyle}"
+                                               Text="Show heatmap" />
+                                </CheckBox>
+
+                                <TextBlock Margin="18,0,8,0"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource MutedTextStyle}"
+                                           Text="Opacity" />
+
+                                <Slider Width="110"
+                                        VerticalAlignment="Center"
+                                        IsEnabled="{Binding IsHeatmapVisible}"
+                                        Maximum="1"
+                                        Minimum="0"
+                                        Value="{Binding HeatmapOpacity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                                <TextBlock Width="42"
+                                           Margin="8,0,0,0"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource MonospaceTextStyle}"
+                                           Text="{Binding HeatmapOpacity, StringFormat={}{0:P0}}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Grid.Row="1" Style="{StaticResource ImageCanvasStyle}">
+                            <Grid>
+                                <Image Margin="12"
+                                       Source="{Binding SelectedImagePreview}"
+                                       Stretch="Uniform" />
+
+                                <Image Margin="12"
+                                       Opacity="{Binding HeatmapOpacity}"
+                                       Source="{Binding HeatmapImageSource}"
+                                       Stretch="Uniform">
+                                    <Image.Style>
+                                        <Style TargetType="Image">
+                                            <Setter Property="Visibility" Value="Visible" />
+
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsHeatmapVisible}" Value="False">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Image.Style>
+                                </Image>
+                            </Grid>
+                        </Border>
+                    </Grid>
 
                     <Grid Grid.Row="3" Margin="0,20,0,0">
                         <Grid.ColumnDefinitions>

@@ -8,6 +8,8 @@ namespace IndustrialVisualAnomalyDetection.Desktop.Tests.Unit.Services.Backend;
 
 public sealed class BackendImageAnalysisServiceTests
 {
+    private const string HeatmapBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
     [Fact]
     public void NullHttpClientIsRejected()
     {
@@ -30,6 +32,10 @@ public sealed class BackendImageAnalysisServiceTests
         Assert.Equal(AnalysisDecision.Anomalous, result.Decision);
         Assert.Equal(1692, result.ProcessingTimeMs);
         Assert.Equal("trace-001", result.TraceId);
+        Assert.Equal("image/png", result.Heatmap.ContentType);
+        Assert.Equal(320, result.Heatmap.Width);
+        Assert.Equal(320, result.Heatmap.Height);
+        Assert.Equal(HeatmapBase64, result.Heatmap.DataBase64);
     }
 
     [Fact]
@@ -92,18 +98,24 @@ public sealed class BackendImageAnalysisServiceTests
     private static HttpResponseMessage CreateSuccessResponse(string decision = "anomalous")
     {
         string json = $$"""
-            {
-              "model": {
-                "id": "mvtec-ad-capsule-320",
-                "category": "capsule"
-              },
-              "score": 4.992109298706055,
-              "threshold": 2.501821517944336,
-              "decision": "{{decision}}",
-              "processingTimeMs": 1692,
-              "traceId": "trace-001"
-            }
-            """;
+        {
+          "model": {
+            "id": "mvtec-ad-capsule-320",
+            "category": "capsule"
+          },
+          "score": 4.992109298706055,
+          "threshold": 2.501821517944336,
+          "decision": "{{decision}}",
+          "processingTimeMs": 1692,
+          "traceId": "trace-001",
+          "heatmap": {
+            "contentType": "image/png",
+            "width": 320,
+            "height": 320,
+            "dataBase64": "{{HeatmapBase64}}"
+          }
+        }
+        """;
 
         return new HttpResponseMessage(HttpStatusCode.OK)
         {

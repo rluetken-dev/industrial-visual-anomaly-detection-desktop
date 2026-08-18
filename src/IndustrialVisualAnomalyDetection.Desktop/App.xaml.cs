@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using IndustrialVisualAnomalyDetection.Desktop.ViewModels;
 using IndustrialVisualAnomalyDetection.Desktop.Services.Backend;
 using IndustrialVisualAnomalyDetection.Desktop.Services.Files;
+using IndustrialVisualAnomalyDetection.Desktop.Services.Images;
 
 namespace IndustrialVisualAnomalyDetection.Desktop;
 
@@ -53,6 +54,7 @@ public partial class App : Application
         // Desktop services
         builder.Services.AddSingleton<IImageFilePicker, ImageFilePicker>();
         builder.Services.AddSingleton<IImagePreviewLoader, ImagePreviewLoader>();
+        builder.Services.AddSingleton<IHeatmapImageLoader, HeatmapImageLoader>();
 
         // Presentation
         builder.Services.AddSingleton<MainWindowViewModel>();

@@ -8,6 +8,7 @@ using IndustrialVisualAnomalyDetection.Desktop.Models.Analysis;
 using IndustrialVisualAnomalyDetection.Desktop.Models.Status;
 using IndustrialVisualAnomalyDetection.Desktop.Services.Backend;
 using IndustrialVisualAnomalyDetection.Desktop.Services.Files;
+using IndustrialVisualAnomalyDetection.Desktop.Services.Images;
 
 namespace IndustrialVisualAnomalyDetection.Desktop.ViewModels;
 
@@ -16,6 +17,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly IBackendHealthService _backendHealthService;
     private readonly IImageFilePicker _imageFilePicker;
     private readonly IImagePreviewLoader _imagePreviewLoader;
+    private readonly IHeatmapImageLoader _heatmapImageLoader;
     private readonly IImageAnalysisService _imageAnalysisService;
     private string? _selectedImagePath;
 
@@ -36,6 +38,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private ImageSource? _selectedImagePreview;
+
+    [ObservableProperty]
+    private ImageSource? _heatmapImageSource;
+
+    [ObservableProperty]
+    private bool _isHeatmapVisible = true;
+
+    [ObservableProperty]
+    private double _heatmapOpacity = 0.40;
 
     [ObservableProperty]
     private string _decisionText = "Awaiting analysis";
@@ -74,16 +85,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IBackendHealthService backendHealthService,
         IImageFilePicker imageFilePicker,
         IImagePreviewLoader imagePreviewLoader,
+        IHeatmapImageLoader heatmapImageLoader,
         IImageAnalysisService imageAnalysisService)
     {
         ArgumentNullException.ThrowIfNull(backendHealthService);
         ArgumentNullException.ThrowIfNull(imageFilePicker);
         ArgumentNullException.ThrowIfNull(imagePreviewLoader);
+        ArgumentNullException.ThrowIfNull(heatmapImageLoader);
         ArgumentNullException.ThrowIfNull(imageAnalysisService);
 
         _backendHealthService = backendHealthService;
         _imageFilePicker = imageFilePicker;
         _imagePreviewLoader = imagePreviewLoader;
+        _heatmapImageLoader = heatmapImageLoader;
         _imageAnalysisService = imageAnalysisService;
     }
 
@@ -149,6 +163,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 _selectedImagePath,
                 cancellationToken);
 
+            HeatmapImageSource = _heatmapImageLoader.Load(result.Heatmap);
             DecisionText = result.Decision == AnalysisDecision.Anomalous ? "Anomalous" : "Normal";
             CurrentDecision = result.Decision;
             ScoreText = result.Score.ToString("F6", CultureInfo.InvariantCulture);
@@ -190,6 +205,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         CategoryText = "—";
         ProcessingTimeText = "—";
         TraceIdText = "—";
+        HeatmapImageSource = null;
     }
 
     private bool CanRefreshHealth()
