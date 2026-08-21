@@ -54,6 +54,34 @@ public sealed class BackendImageAnalysisServiceTests
         Assert.Equal(System.IO.Path.GetFileName(imageFile.Path), handler.ImageFileName);
         Assert.Equal("image/png", handler.ImageContentType?.MediaType);
         Assert.Equal(TemporaryImageFile.Content, handler.ImageBytes);
+        Assert.Null(handler.ModelId);
+    }
+
+    [Fact]
+    public async Task SelectedModelIdIsSentAsMultipartFormData()
+    {
+        using TemporaryImageFile imageFile = new(".png");
+        StubHttpMessageHandler handler = new(CreateSuccessResponse());
+        BackendImageAnalysisService service = CreateService(handler);
+
+        await service.AnalyzeAsync(
+            imageFile.Path,
+            "visa-cashew-generalized-q95-320");
+
+        Assert.Equal(
+            "visa-cashew-generalized-q95-320",
+            handler.ModelId);
+    }
+
+    [Fact]
+    public async Task WhitespaceModelIdIsRejected()
+    {
+        using TemporaryImageFile imageFile = new(".png");
+        BackendImageAnalysisService service =
+            CreateService(new StubHttpMessageHandler(CreateSuccessResponse()));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.AnalyzeAsync(imageFile.Path, " "));
     }
 
     [Fact]
@@ -148,6 +176,8 @@ public sealed class BackendImageAnalysisServiceTests
 
         public byte[]? ImageBytes { get; private set; }
 
+        public string? ModelId { get; private set; }
+
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
@@ -158,7 +188,8 @@ public sealed class BackendImageAnalysisServiceTests
 
             if (request.Content is MultipartFormDataContent multipartContent)
             {
-                HttpContent? imageContent = multipartContent.FirstOrDefault();
+                HttpContent? imageContent = multipartContent.FirstOrDefault(content =>
+                    content.Headers.ContentDisposition?.Name?.Trim('"') == "image");
 
                 if (imageContent is not null)
                 {
@@ -166,6 +197,14 @@ public sealed class BackendImageAnalysisServiceTests
                     ImageFileName = imageContent.Headers.ContentDisposition?.FileName?.Trim('"');
                     ImageContentType = imageContent.Headers.ContentType;
                     ImageBytes = await imageContent.ReadAsByteArrayAsync(cancellationToken);
+                }
+
+                HttpContent? modelIdContent = multipartContent.FirstOrDefault(content =>
+                    content.Headers.ContentDisposition?.Name?.Trim('"') == "modelId");
+
+                if (modelIdContent is not null)
+                {
+                    ModelId = await modelIdContent.ReadAsStringAsync(cancellationToken);
                 }
             }
 

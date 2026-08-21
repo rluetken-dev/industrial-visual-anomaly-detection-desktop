@@ -4,7 +4,7 @@
         xmlns:analysisModels="clr-namespace:IndustrialVisualAnomalyDetection.Desktop.Models.Analysis"
         Title="Industrial Visual Anomaly Detection"
         Width="1280"
-        Height="820"
+        Height="920"
         MinWidth="1080"
         MinHeight="700">
 
@@ -96,10 +96,12 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
+                    <!-- Section heading -->
                     <StackPanel Grid.Row="0">
                         <TextBlock Style="{StaticResource SectionTitleTextStyle}"
                                    Text="Image inspection" />
@@ -108,7 +110,61 @@
                                    Text="Select one PNG or JPEG image before starting the analysis." />
                     </StackPanel>
 
-                    <Grid Grid.Row="1" Margin="0,20,0,16">
+                    <!-- Model selection -->
+                    <Grid Grid.Row="1" Margin="0,20,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource MetricLabelTextStyle}"
+                                       Text="INFERENCE MODEL" />
+
+                            <ComboBox Margin="0,6,0,0"
+                                      ItemsSource="{Binding AvailableModels}"
+                                      SelectedItem="{Binding SelectedModel, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Foreground="{StaticResource AppBackgroundBrush}"
+                                                   Text="{Binding DisplayName}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+
+                                <ComboBox.Style>
+                                    <Style TargetType="ComboBox">
+                                        <Setter Property="IsEnabled" Value="True" />
+                                        <Setter Property="Foreground"
+                                                Value="{StaticResource AppBackgroundBrush}" />
+
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsModelCatalogLoading}"
+                                                         Value="True">
+                                                <Setter Property="IsEnabled" Value="False" />
+                                            </DataTrigger>
+
+                                            <DataTrigger Binding="{Binding IsAnalysisRunning}"
+                                                         Value="True">
+                                                <Setter Property="IsEnabled" Value="False" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ComboBox.Style>
+                            </ComboBox>
+
+                            <TextBlock Margin="0,6,0,0"
+                                       Style="{StaticResource MutedTextStyle}"
+                                       Text="{Binding ModelCatalogStatusText}" />
+                        </StackPanel>
+
+                        <Button Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Command="{Binding RefreshModelCatalogCommand}"
+                                Content="Refresh models" />
+                    </Grid>
+
+                    <!-- Image file selection -->
+                    <Grid Grid.Row="2" Margin="0,20,0,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -124,7 +180,8 @@
                                 Content="Select image" />
                     </Grid>
 
-                    <Grid Grid.Row="2">
+                    <!-- Image overlay and preview -->
+                    <Grid Grid.Row="3">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
@@ -172,11 +229,11 @@
 
                         <Border Grid.Row="1" Style="{StaticResource ImageCanvasStyle}">
                             <Grid>
-                                <Image Margin="12"
+                                <Image Margin="0"
                                        Source="{Binding SelectedImagePreview}"
                                        Stretch="Uniform" />
 
-                                <Image Margin="12"
+                                <Image Margin="0"
                                        Opacity="{Binding HeatmapOpacity}"
                                        Source="{Binding HeatmapImageSource}"
                                        Stretch="Uniform">
@@ -185,8 +242,10 @@
                                             <Setter Property="Visibility" Value="Visible" />
 
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsHeatmapVisible}" Value="False">
-                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                <DataTrigger Binding="{Binding IsHeatmapVisible}"
+                                                 Value="False">
+                                                    <Setter Property="Visibility"
+                                                Value="Collapsed" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -196,7 +255,8 @@
                         </Border>
                     </Grid>
 
-                    <Grid Grid.Row="3" Margin="0,20,0,0">
+                    <!-- Analysis actions -->
+                    <Grid Grid.Row="4" Margin="0,20,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -204,19 +264,19 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   Style="{StaticResource MutedTextStyle}"
-                                   Text="PNG or JPEG · maximum 10 MiB" />
+                       VerticalAlignment="Center"
+                       Style="{StaticResource MutedTextStyle}"
+                       Text="PNG or JPEG · maximum 10 MiB" />
 
                         <Button Grid.Column="1"
-                                Margin="0,0,10,0"
-                                Command="{Binding AnalyzeImageCancelCommand}"
-                                Content="Cancel" />
+                    Margin="0,0,10,0"
+                    Command="{Binding AnalyzeImageCancelCommand}"
+                    Content="Cancel" />
 
                         <Button Grid.Column="2"
-                                Command="{Binding AnalyzeImageCommand}"
-                                Content="Analyze image"
-                                Style="{StaticResource PrimaryButtonStyle}" />
+                    Command="{Binding AnalyzeImageCommand}"
+                    Content="Analyze image"
+                    Style="{StaticResource PrimaryButtonStyle}" />
                     </Grid>
                 </Grid>
             </Border>

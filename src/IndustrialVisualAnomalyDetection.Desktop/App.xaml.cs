@@ -41,6 +41,22 @@ public partial class App : Application
                 httpClient.BaseAddress = new Uri(normalizedBaseAddress, UriKind.Absolute);
                 httpClient.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
             });
+        builder.Services.AddHttpClient<IInferenceModelCatalogService, BackendInferenceModelCatalogService>(
+            (serviceProvider, httpClient) =>
+            {
+                BackendOptions options = serviceProvider
+                    .GetRequiredService<IOptions<BackendOptions>>()
+                    .Value;
+
+                string normalizedBaseAddress =
+                    $"{options.BaseAddress.TrimEnd('/')}/";
+
+                httpClient.BaseAddress =
+                    new Uri(normalizedBaseAddress, UriKind.Absolute);
+
+                httpClient.Timeout =
+                    TimeSpan.FromSeconds(options.TimeoutSeconds);
+            });
         builder.Services.AddHttpClient<IImageAnalysisService, BackendImageAnalysisService>(
             (serviceProvider, httpClient) =>
             {
@@ -76,6 +92,7 @@ public partial class App : Application
         mainWindow.Show();
 
         await viewModel.RefreshHealthCommand.ExecuteAsync(null);
+        await viewModel.RefreshModelCatalogCommand.ExecuteAsync(null);
     }
 
     protected override void OnExit(ExitEventArgs e)

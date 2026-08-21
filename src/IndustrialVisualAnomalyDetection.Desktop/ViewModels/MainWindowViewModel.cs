@@ -9,6 +9,9 @@ using IndustrialVisualAnomalyDetection.Desktop.Models.Status;
 using IndustrialVisualAnomalyDetection.Desktop.Services.Backend;
 using IndustrialVisualAnomalyDetection.Desktop.Services.Files;
 using IndustrialVisualAnomalyDetection.Desktop.Services.Images;
+using System.Collections.ObjectModel;
+using System.Text.Json;
+using IndustrialVisualAnomalyDetection.Desktop.Models.Inference;
 
 namespace IndustrialVisualAnomalyDetection.Desktop.ViewModels;
 
@@ -19,6 +22,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly IImagePreviewLoader _imagePreviewLoader;
     private readonly IHeatmapImageLoader _heatmapImageLoader;
     private readonly IImageAnalysisService _imageAnalysisService;
+    private readonly IInferenceModelCatalogService _modelCatalogService;
     private string? _selectedImagePath;
 
     [ObservableProperty]
@@ -81,24 +85,93 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private bool _isAnalysisRunning;
 
+    public ObservableCollection<InferenceModel> AvailableModels { get; } = [];
+
+    [ObservableProperty]
+    private InferenceModel? _selectedModel;
+
+    [ObservableProperty]
+    private bool _isModelCatalogLoading;
+
+    [ObservableProperty]
+    private string _modelCatalogStatusText = "Models not loaded";
+
     public MainWindowViewModel(
         IBackendHealthService backendHealthService,
+        IInferenceModelCatalogService modelCatalogService,
         IImageFilePicker imageFilePicker,
         IImagePreviewLoader imagePreviewLoader,
         IHeatmapImageLoader heatmapImageLoader,
         IImageAnalysisService imageAnalysisService)
     {
         ArgumentNullException.ThrowIfNull(backendHealthService);
+        ArgumentNullException.ThrowIfNull(modelCatalogService);
         ArgumentNullException.ThrowIfNull(imageFilePicker);
         ArgumentNullException.ThrowIfNull(imagePreviewLoader);
         ArgumentNullException.ThrowIfNull(heatmapImageLoader);
         ArgumentNullException.ThrowIfNull(imageAnalysisService);
 
         _backendHealthService = backendHealthService;
+        _modelCatalogService = modelCatalogService;
         _imageFilePicker = imageFilePicker;
         _imagePreviewLoader = imagePreviewLoader;
         _heatmapImageLoader = heatmapImageLoader;
         _imageAnalysisService = imageAnalysisService;
+    }
+
+    private bool CanRefreshModelCatalog()
+    {
+        return !IsModelCatalogLoading && !IsAnalysisRunning;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRefreshModelCatalog))]
+    private async Task RefreshModelCatalogAsync(CancellationToken cancellationToken)
+    {
+        IsModelCatalogLoading = true;
+        ModelCatalogStatusText = "Loading available models...";
+
+        try
+        {
+            InferenceModelCatalog catalog =
+                await _modelCatalogService.GetCatalogAsync(cancellationToken);
+
+            AvailableModels.Clear();
+
+            foreach (InferenceModel model in catalog.Models)
+            {
+                AvailableModels.Add(model);
+            }
+
+            SelectedModel = AvailableModels.Single(model =>
+                model.Id == catalog.DefaultModelId);
+
+            ModelCatalogStatusText =
+                $"{AvailableModels.Count} model(s) available";
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            ClearModelCatalog();
+            ModelCatalogStatusText = "Loading models was cancelled";
+        }
+        catch (Exception exception) when (
+            exception is HttpRequestException
+            or InvalidDataException
+            or JsonException)
+        {
+            ClearModelCatalog();
+            ModelCatalogStatusText = "Model catalog unavailable";
+        }
+        finally
+        {
+            IsModelCatalogLoading = false;
+        }
+    }
+
+    private void ClearModelCatalog()
+    {
+        AvailableModels.Clear();
+        SelectedModel = null;
     }
 
     private bool CanSelectImage()
@@ -142,16 +215,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private bool CanAnalyzeImage()
     {
-        return _selectedImagePath is not null && !IsAnalysisRunning;
+        return _selectedImagePath is not null
+            && SelectedModel is not null
+            && !IsAnalysisRunning;
     }
 
     [RelayCommand(CanExecute = nameof(CanAnalyzeImage), IncludeCancelCommand = true)]
     private async Task AnalyzeImageAsync(CancellationToken cancellationToken)
     {
-        if (_selectedImagePath is null)
+        if (_selectedImagePath is null || SelectedModel is null)
         {
             return;
         }
+
+        InferenceModel selectedModel = SelectedModel;
 
         IsAnalysisRunning = true;
         ResetAnalysisResult();
@@ -161,6 +238,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             ImageAnalysisResult result = await _imageAnalysisService.AnalyzeAsync(
                 _selectedImagePath,
+                selectedModel.Id,
                 cancellationToken);
 
             HeatmapImageSource = _heatmapImageLoader.Load(result.Heatmap);
@@ -287,6 +365,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
     partial void OnIsAnalysisRunningChanged(bool value)
     {
         SelectImageCommand.NotifyCanExecuteChanged();
+        AnalyzeImageCommand.NotifyCanExecuteChanged();
+        RefreshModelCatalogCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSelectedModelChanged(InferenceModel? value)
+    {
+        AnalyzeImageCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsModelCatalogLoadingChanged(bool value)
+    {
+        RefreshModelCatalogCommand.NotifyCanExecuteChanged();
         AnalyzeImageCommand.NotifyCanExecuteChanged();
     }
 }

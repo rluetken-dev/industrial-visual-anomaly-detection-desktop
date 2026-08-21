@@ -22,9 +22,15 @@ public sealed class BackendImageAnalysisService : IImageAnalysisService
 
     public async Task<ImageAnalysisResult> AnalyzeAsync(
         string imagePath,
+        string? modelId = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
+
+        if (modelId is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
+        }
 
         await using FileStream imageStream = new(
             imagePath,
@@ -39,6 +45,11 @@ public sealed class BackendImageAnalysisService : IImageAnalysisService
 
         using MultipartFormDataContent requestContent = new();
         requestContent.Add(imageContent, "image", Path.GetFileName(imagePath));
+
+        if (modelId is not null)
+        {
+            requestContent.Add(new StringContent(modelId), "modelId");
+        }
 
         using HttpResponseMessage response = await _httpClient.PostAsync(
             "api/v1/analyses",

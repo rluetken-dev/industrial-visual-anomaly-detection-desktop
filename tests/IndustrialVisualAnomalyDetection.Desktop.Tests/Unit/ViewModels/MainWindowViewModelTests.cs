@@ -4,6 +4,7 @@ using IndustrialVisualAnomalyDetection.Desktop.Services.Backend;
 using IndustrialVisualAnomalyDetection.Desktop.Services.Files;
 using IndustrialVisualAnomalyDetection.Desktop.Services.Images;
 using IndustrialVisualAnomalyDetection.Desktop.ViewModels;
+using IndustrialVisualAnomalyDetection.Desktop.Models.Inference;
 
 namespace IndustrialVisualAnomalyDetection.Desktop.Tests.Unit.ViewModels;
 
@@ -28,12 +29,82 @@ public sealed class MainWindowViewModelTests
         Assert.Equal("Select an image to begin.", viewModel.StatusText);
         Assert.False(viewModel.IsHealthCheckRunning);
         Assert.False(viewModel.IsAnalysisRunning);
+        Assert.Empty(viewModel.AvailableModels);
+        Assert.Null(viewModel.SelectedModel);
+        Assert.False(viewModel.IsModelCatalogLoading);
+        Assert.Equal("Models not loaded", viewModel.ModelCatalogStatusText);
+    }
+
+    [Fact]
+    public async Task ModelCatalogSelectsConfiguredDefaultModel()
+    {
+        InferenceModelCatalog catalog = new(
+            "cashew",
+            [
+                new InferenceModel(
+                "capsule",
+                "MVTec AD - Capsule",
+                "capsule",
+                320,
+                false),
+            new InferenceModel(
+                "cashew",
+                "VisA - Cashew",
+                "cashew",
+                320,
+                true)
+            ]);
+
+        StubInferenceModelCatalogService modelCatalogService = new(catalog);
+
+        MainWindowViewModel viewModel = CreateViewModel(
+            modelCatalogService: modelCatalogService);
+
+        await viewModel.RefreshModelCatalogCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, viewModel.AvailableModels.Count);
+        Assert.Equal("cashew", viewModel.SelectedModel?.Id);
+        Assert.Equal("2 model(s) available", viewModel.ModelCatalogStatusText);
+        Assert.Equal(1, modelCatalogService.CallCount);
+        Assert.False(viewModel.IsModelCatalogLoading);
+    }
+
+    [Fact]
+    public async Task ModelCatalogFailureProducesUnderstandableState()
+    {
+        StubInferenceModelCatalogService modelCatalogService = new(
+            exception: new HttpRequestException("Unavailable"));
+
+        MainWindowViewModel viewModel = CreateViewModel(
+            modelCatalogService: modelCatalogService);
+
+        await viewModel.RefreshModelCatalogCommand.ExecuteAsync(null);
+
+        Assert.Empty(viewModel.AvailableModels);
+        Assert.Null(viewModel.SelectedModel);
+        Assert.Equal(
+            "Model catalog unavailable",
+            viewModel.ModelCatalogStatusText);
+        Assert.False(viewModel.IsModelCatalogLoading);
     }
 
     [Fact]
     public void NullHealthServiceIsRejected()
     {
         Assert.Throws<ArgumentNullException>(() => new MainWindowViewModel(
+            null!,
+            new StubInferenceModelCatalogService(),
+            new StubImageFilePicker(),
+            new StubImagePreviewLoader(),
+            new StubHeatmapImageLoader(),
+            new StubImageAnalysisService()));
+    }
+
+    [Fact]
+    public void NullModelCatalogServiceIsRejected()
+    {
+        Assert.Throws<ArgumentNullException>(() => new MainWindowViewModel(
+            new StubBackendHealthService(),
             null!,
             new StubImageFilePicker(),
             new StubImagePreviewLoader(),
@@ -46,6 +117,7 @@ public sealed class MainWindowViewModelTests
     {
         Assert.Throws<ArgumentNullException>(() => new MainWindowViewModel(
             new StubBackendHealthService(),
+            new StubInferenceModelCatalogService(),
             null!,
             new StubImagePreviewLoader(),
             new StubHeatmapImageLoader(),
@@ -57,6 +129,7 @@ public sealed class MainWindowViewModelTests
     {
         Assert.Throws<ArgumentNullException>(() => new MainWindowViewModel(
             new StubBackendHealthService(),
+            new StubInferenceModelCatalogService(),
             new StubImageFilePicker(),
             null!,
             new StubHeatmapImageLoader(),
@@ -68,6 +141,7 @@ public sealed class MainWindowViewModelTests
     {
         Assert.Throws<ArgumentNullException>(() => new MainWindowViewModel(
             new StubBackendHealthService(),
+            new StubInferenceModelCatalogService(),
             new StubImageFilePicker(),
             new StubImagePreviewLoader(),
             null!,
@@ -79,6 +153,7 @@ public sealed class MainWindowViewModelTests
     {
         Assert.Throws<ArgumentNullException>(() => new MainWindowViewModel(
             new StubBackendHealthService(),
+            new StubInferenceModelCatalogService(),
             new StubImageFilePicker(),
             new StubImagePreviewLoader(),
             new StubHeatmapImageLoader(),
@@ -175,6 +250,7 @@ public sealed class MainWindowViewModelTests
             heatmapImageLoader: heatmapImageLoader,
             imageAnalysisService: analysisService);
 
+        await viewModel.RefreshModelCatalogCommand.ExecuteAsync(null);
         viewModel.SelectImageCommand.Execute(null);
         await viewModel.AnalyzeImageCommand.ExecuteAsync(null);
 
@@ -191,6 +267,7 @@ public sealed class MainWindowViewModelTests
         Assert.Same(heatmapImageLoader.ImageSource, viewModel.HeatmapImageSource);
         Assert.Equal("Analysis completed successfully.", viewModel.StatusText);
         Assert.False(viewModel.IsAnalysisRunning);
+        Assert.Equal("test-model", analysisService.AnalyzedModelId);
     }
 
     [Fact]
@@ -211,6 +288,7 @@ public sealed class MainWindowViewModelTests
             imageFilePicker: new StubImageFilePicker(@"C:\images\capsule.png"),
             imageAnalysisService: analysisService);
 
+        await viewModel.RefreshModelCatalogCommand.ExecuteAsync(null);
         viewModel.SelectImageCommand.Execute(null);
         await viewModel.AnalyzeImageCommand.ExecuteAsync(null);
 
@@ -281,6 +359,7 @@ public sealed class MainWindowViewModelTests
 
     private static MainWindowViewModel CreateViewModel(
         IBackendHealthService? healthService = null,
+        IInferenceModelCatalogService? modelCatalogService = null,
         IImageFilePicker? imageFilePicker = null,
         IImagePreviewLoader? imagePreviewLoader = null,
         IHeatmapImageLoader? heatmapImageLoader = null,
@@ -288,6 +367,7 @@ public sealed class MainWindowViewModelTests
     {
         return new MainWindowViewModel(
             healthService ?? new StubBackendHealthService(),
+            modelCatalogService ?? new StubInferenceModelCatalogService(),
             imageFilePicker ?? new StubImageFilePicker(),
             imagePreviewLoader ?? new StubImagePreviewLoader(),
             heatmapImageLoader ?? new StubHeatmapImageLoader(),
@@ -304,6 +384,45 @@ public sealed class MainWindowViewModelTests
             1,
             1,
             transparentPngBase64);
+    }
+
+    private sealed class StubInferenceModelCatalogService : IInferenceModelCatalogService
+    {
+        private readonly InferenceModelCatalog _catalog;
+        private readonly Exception? _exception;
+
+        public StubInferenceModelCatalogService(
+            InferenceModelCatalog? catalog = null,
+            Exception? exception = null)
+        {
+            _catalog = catalog ?? new InferenceModelCatalog(
+                "test-model",
+                [
+                    new InferenceModel(
+                    "test-model",
+                    "Test Model",
+                    "test-category",
+                    320,
+                    true)
+                ]);
+
+            _exception = exception;
+        }
+
+        public int CallCount { get; private set; }
+
+        public Task<InferenceModelCatalog> GetCatalogAsync(
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+
+            if (_exception is not null)
+            {
+                return Task.FromException<InferenceModelCatalog>(_exception);
+            }
+
+            return Task.FromResult(_catalog);
+        }
     }
 
     private sealed class StubImageAnalysisService : IImageAnalysisService
@@ -330,11 +449,15 @@ public sealed class MainWindowViewModelTests
 
         public string? AnalyzedPath { get; private set; }
 
+        public string? AnalyzedModelId { get; private set; }
+
         public Task<ImageAnalysisResult> AnalyzeAsync(
             string imagePath,
+            string? modelId = null,
             CancellationToken cancellationToken = default)
         {
             AnalyzedPath = imagePath;
+            AnalyzedModelId = modelId;
 
             if (_exception is not null)
             {

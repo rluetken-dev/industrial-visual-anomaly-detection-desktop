@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines how the Windows desktop client integrates with the existing Industrial Visual Anomaly Detection ASP.NET Core backend.
+This document defines how the Windows desktop client integrates with the Industrial Visual Anomaly Detection ASP.NET Core backend.
 
 It records the client-side understanding of the verified HTTP contract. The backend repository remains authoritative when its published contract changes.
 
@@ -14,7 +14,7 @@ The desktop application communicates only with the ASP.NET Core backend.
 WPF desktop client
         |
         | HTTPS, multipart form data, JSON and Problem Details
-        | Receives decision metadata and Base64 PNG heatmap
+        | Discovers models and receives decisions with Base64 PNG heatmaps
         v
 ASP.NET Core backend
 ```
@@ -22,6 +22,7 @@ ASP.NET Core backend
 The desktop application must not:
 
 - call the Python inference service directly;
+- read the inference model registry;
 - load model artifacts;
 - reproduce backend image-signature validation;
 - calculate the authoritative anomaly decision;
@@ -30,10 +31,11 @@ The desktop application must not:
 
 ## Client Components
 
-Backend communication is isolated behind two application-facing service interfaces:
+Backend communication is isolated behind three application-facing service interfaces:
 
 - `IBackendHealthService`, implemented by `BackendHealthService`, handles liveness and readiness;
-- `IImageAnalysisService`, implemented by `BackendImageAnalysisService`, handles multipart image analysis and maps the required heatmap contract.
+- `IInferenceModelCatalogService`, implemented by `BackendInferenceModelCatalogService`, retrieves and maps the available inference models;
+- `IImageAnalysisService`, implemented by `BackendImageAnalysisService`, handles multipart image analysis with an optional model identifier and maps the required heatmap contract.
 
 Heatmap decoding is isolated behind `IHeatmapImageLoader`, implemented by `HeatmapImageLoader`.
 
@@ -58,7 +60,8 @@ The desktop client uses:
 | --- | --- | --- |
 | `GET` | `/health/live` | Verify that the backend process responds. |
 | `GET` | `/health/ready` | Verify that the backend and configured inference service are ready. |
-| `POST` | `/api/v1/analyses` | Submit one image and receive decision data with a heatmap. |
+| `GET` | `/api/v1/models` | Discover the default and available inference models. |
+| `POST` | `/api/v1/analyses` | Submit one image with a selected model and receive decision data with a heatmap. |
 
 The desktop client does not call the backend OpenAPI document during normal operation.
 
@@ -127,6 +130,58 @@ Each health indicator supports:
 
 Continuous polling is not part of the current implementation.
 
+## Model Catalog
+
+### Request
+
+```http
+GET /api/v1/models
+```
+
+### Successful Response
+
+Status: `200 OK`
+
+```json
+{
+  "defaultModelId": "mvtec-ad-capsule-320",
+  "models": [
+    {
+      "id": "mvtec-ad-capsule-320",
+      "displayName": "MVTec AD - Capsule",
+      "category": "capsule",
+      "inputSize": 320,
+      "isDefault": true
+    },
+    {
+      "id": "visa-cashew-generalized-q95-320",
+      "displayName": "VisA - Cashew",
+      "category": "cashew",
+      "inputSize": 320,
+      "isDefault": false
+    }
+  ]
+}
+```
+
+### Response Fields
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `defaultModelId` | string | yes | Identifier selected by the client after catalog loading. |
+| `models` | array | yes | Available model descriptors. |
+| `models[].id` | string | yes | Stable identifier forwarded during analysis. |
+| `models[].displayName` | string | yes | Operator-facing model name. |
+| `models[].category` | string | yes | Industrial object category handled by the model. |
+| `models[].inputSize` | integer | yes | Positive square model input size. |
+| `models[].isDefault` | boolean | yes | Indicates the declared default entry. |
+
+`BackendInferenceModelCatalogService` maps the response into `InferenceModelCatalog` and `InferenceModel` application models. Invalid, incomplete, empty, duplicate, or internally inconsistent catalog data is rejected rather than exposed to the UI.
+
+After a successful catalog refresh, `MainWindowViewModel` selects the declared default model. The operator may then select another available model. Model selection does not automatically validate whether a subsequently selected image belongs to the corresponding category.
+
+Catalog loading occurs after startup and can be repeated through **Refresh models**. Refreshing the catalog replaces the client-side catalog with the backend's current authoritative response.
+
 ## Image Analysis
 
 ### Request
@@ -136,11 +191,14 @@ POST /api/v1/analyses
 Content-Type: multipart/form-data
 ```
 
-The multipart form contains one required image part:
+The multipart form contains the image and the model selected by the operator:
 
-| Field | Type | Required | Description |
+| Field | Type | Required by desktop workflow | Description |
 | --- | --- | --- | --- |
 | `image` | binary file | yes | PNG or JPEG image submitted for analysis. |
+| `modelId` | string | yes | Identifier obtained from the current model catalog. |
+
+The backend contract keeps `modelId` optional for backward compatibility and applies its configured default when the field is omitted. The current desktop workflow selects a catalog entry and forwards its identifier explicitly.
 
 The multipart boundary is generated by .NET. The client does not set the complete `Content-Type` header manually when using `MultipartFormDataContent`.
 
@@ -184,8 +242,8 @@ The shortened `dataBase64` value above is illustrative. A real successful respon
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `model.id` | string | yes | Identifier of the model configuration used for inference. |
-| `model.category` | string | yes | Industrial object category handled by the model. |
+| `model.id` | string | yes | Identifier of the model actually used for inference. |
+| `model.category` | string | yes | Industrial object category handled by that model. |
 | `score` | number | yes | Aggregated anomaly score. |
 | `threshold` | number | yes | Decision threshold selected during model export. |
 | `decision` | string | yes | Authoritative backend decision, currently `normal` or `anomalous`. |
@@ -198,7 +256,7 @@ The shortened `dataBase64` value above is illustrative. A real successful respon
 
 `BackendImageAnalysisService` validates and maps the response into `ImageAnalysisResult` and its required `AnalysisHeatmap`. The view model displays the supplied decision and supporting values without recalculating the decision from score and threshold.
 
-The client tolerates unknown additional response properties to allow compatible backend evolution. Missing or invalid required fields cause the response to be rejected.
+The returned model identity is authoritative evidence of which model handled the request. The client tolerates unknown additional response properties to allow compatible backend evolution. Missing or invalid required fields cause the response to be rejected.
 
 ## Heatmap Contract and Mapping
 
@@ -228,7 +286,7 @@ Backend JSON response
 
 `HeatmapImageLoader` decodes the payload through an in-memory stream, loads the complete bitmap using `BitmapCacheOption.OnLoad`, and freezes the resulting image. The returned `ImageSource` therefore does not depend on a response stream that has already been disposed.
 
-Heatmap visibility and opacity are local presentation controls. They do not cause another backend request and do not change the decision, score, threshold, or trace identifier.
+Heatmap visibility and opacity are local presentation controls. They do not cause another backend request and do not change the decision, score, threshold, model selection, or trace identifier.
 
 ## Spatial Alignment Assumption
 
@@ -281,12 +339,12 @@ Exact titles and details may vary by failure. The desktop maps status and availa
 
 | Status | Meaning for the desktop client |
 | --- | --- |
-| `400 Bad Request` | Missing, empty, malformed, or unreadable image input. |
+| `400 Bad Request` | Missing, empty, malformed, or unreadable image input, or invalid multipart model input. |
 | `413 Content Too Large` | Request or image exceeds the configured upload limit. |
 | `415 Unsupported Media Type` | Declared or detected image type is not supported. |
-| `503 Service Unavailable` | Backend inference dependency is unavailable, timed out, or returned an invalid response. |
+| `503 Service Unavailable` | Backend inference dependency is unavailable, timed out, returned an invalid response, or could not resolve the requested model. |
 
-Other non-success responses are handled safely as unexpected backend failures.
+The current backend deliberately maps an unknown inference model to `503 Service Unavailable` because model resolution occurs across the inference dependency boundary. Other non-success responses are handled safely as unexpected backend failures.
 
 ## Client-Side Failure Categories
 
@@ -294,6 +352,8 @@ The desktop client distinguishes presentation for:
 
 - user cancellation;
 - local file access or preview failure;
+- model-catalog loading or validation failure;
+- missing model selection;
 - backend validation or request failure;
 - backend not ready;
 - inference or service unavailability;
@@ -318,7 +378,7 @@ Trace information from future richer Problem Details mapping should be preserved
 
 ## Timeouts and Cancellation
 
-The backend timeout is configured through `BackendOptions.TimeoutSeconds`. The configured typed client boundary covers health and image-analysis calls.
+The backend timeout is configured through `BackendOptions.TimeoutSeconds`. The configured typed-client boundary covers health, model-catalog, and image-analysis calls.
 
 Cancellation is propagated to the HTTP operation. The view model owns a cancellation source for the active analysis and exposes an explicit cancel command.
 
@@ -330,19 +390,20 @@ The client distinguishes:
 
 ## Serialization and Validation
 
-The client uses `System.Text.Json` with explicit transport types inside the backend service implementation.
+The client uses `System.Text.Json` with explicit transport types inside the backend service implementations.
 
 Response handling:
 
 - accepts the backend camel-case JSON representation;
 - tolerates unknown properties;
-- validates required nested and scalar values;
+- validates required catalog, nested, and scalar values;
+- rejects inconsistent model catalogs;
 - rejects unsupported decisions;
 - rejects missing or incompatible result data;
 - rejects missing or invalid heatmap data;
-- maps valid transport data into `ImageAnalysisResult` before updating UI state.
+- maps valid transport data into application models before updating UI state.
 
-Partially valid transport data is not exposed as a successful result.
+Partially valid transport data is not exposed as a successful catalog or analysis result.
 
 ## HTTP Client Lifetime
 
@@ -363,7 +424,10 @@ Current automated coverage includes:
 
 - liveness and readiness response mapping;
 - unavailable and timeout health behavior;
-- multipart image request construction;
+- model-catalog request and response mapping;
+- model and catalog invariants;
+- default and explicit model selection;
+- multipart image and model-identifier request construction;
 - successful normal and anomalous response mapping;
 - required heatmap-object mapping;
 - missing and invalid heatmap rejection;
@@ -372,32 +436,35 @@ Current automated coverage includes:
 - invalid or incomplete response rejection;
 - non-success response handling;
 - cancellation and transport failures;
-- view-model analysis, health, and heatmap state transitions.
+- view-model catalog, analysis, health, and heatmap state transitions.
 
-The complete desktop suite currently contains 49 passing tests.
+The complete desktop suite currently contains 60 passing tests.
 
 ## Local Verification
 
-With the backend running, liveness can be checked from PowerShell:
+With the backend running, liveness and readiness can be checked from PowerShell:
 
 ```powershell
-curl.exe --insecure https://localhost:7056/health/live
+Invoke-RestMethod https://localhost:7056/health/live
+
+Invoke-RestMethod https://localhost:7056/health/ready
 ```
 
-Readiness can be checked with:
+The model catalog can be inspected with:
 
 ```powershell
-curl.exe --insecure https://localhost:7056/health/ready
+Invoke-RestMethod https://localhost:7056/api/v1/models |
+    ConvertTo-Json -Depth 5
 ```
 
-An image can be submitted and the JSON response saved with:
+An image can be submitted with an explicit model and the JSON response saved with:
 
 ```powershell
 curl.exe `
-    --insecure `
     -X POST `
     https://localhost:7056/api/v1/analyses `
     -F "image=@C:\path\to\image.png;type=image/png" `
+    -F "modelId=mvtec-ad-capsule-320" `
     --output .\outputs\analysis-response.json
 ```
 
@@ -413,7 +480,7 @@ $response = Get-Content -Raw .\outputs\analysis-response.json |
 )
 ```
 
-`--insecure` is acceptable only for this manual local command when the development certificate is not trusted. The desktop application itself does not disable certificate validation.
+If the local development certificate is not trusted, `curl.exe --insecure` may be used only for a manual local request. The desktop application itself does not disable certificate validation.
 
 Local response files and decoded heatmaps under `outputs` are verification artifacts and shall not be committed.
 
@@ -421,23 +488,31 @@ Local response files and decoded heatmaps under `outputs` are verification artif
 
 The complete local chain has been verified with the Python inference service, ASP.NET Core backend, and WPF desktop client running simultaneously.
 
-Verified examples using the exported `mvtec-ad-capsule-320` artifact:
+The native desktop workflow successfully discovered and selected:
+
+```text
+mvtec-ad-capsule-320
+mvtec-ad-bottle-generalized-320
+visa-candle-generalized-q95-320
+visa-cashew-generalized-q95-320
+```
+
+Representative Capsule results were:
 
 | Image | Score | Threshold | Decision | Heatmap |
 | --- | ---: | ---: | --- | --- |
 | Capsule `test/good/000.png` | `1.848755` | `2.501822` | `normal` | `320 x 320` PNG overlay |
 | Capsule `test/poke/000.png` | `4.992109` | `2.501822` | `anomalous` | `320 x 320` PNG overlay |
 
-The desktop displayed model identifier, category, processing duration, trace identifier, authoritative backend decision, and aligned heatmap for both requests.
+The desktop displayed the returned model identifier, category, processing duration, trace identifier, authoritative decision, and aligned heatmap. Overlay visibility and opacity were also verified.
 
-Overlay visibility and opacity were verified at 0, 40, and 100 percent. The selected default is 40 percent.
-
-These examples verify integration behavior; they are not a new model benchmark or evidence of pixel-accurate segmentation.
+These examples verify catalog discovery, explicit model routing, integration behavior, and presentation. They are not new model benchmarks or evidence of pixel-accurate segmentation.
 
 ## Future Contract Extensions
 
 Possible later extensions include:
 
+- automatic category compatibility checks between selected models and images;
 - transform metadata for crop-aware or aspect-ratio-changing heatmap alignment;
 - richer model metadata;
 - analysis identifiers;
@@ -450,9 +525,9 @@ The desktop client should not implement speculative fields before the backend ex
 
 ## Current Integration Status
 
-The complete analysis and heatmap integration is implemented and verified. The desktop client performs startup and manual health checks, submits PNG and JPEG images through the backend analysis endpoint, maps valid responses and required heatmaps into application models, decodes PNG heatmaps, supports cancellation, and presents successful and failed operations as UI state.
+The selectable multi-model analysis and heatmap integration is implemented and verified. The desktop client performs startup and manual health checks, retrieves and validates the model catalog, selects its declared default, supports manual model selection, submits PNG and JPEG images with explicit model identifiers, maps valid results and heatmaps into application models, supports cancellation, and presents successful and failed operations as UI state.
 
-Normal and anomalous image requests have both been verified end to end against the real local stack. Heatmap transport, validation, decoding, alignment, visibility, and opacity control are part of the current integration rather than future scope.
+Capsule, Bottle, Candle, and Cashew selection have been verified end to end through the native desktop workflow. Heatmap transport, validation, decoding, alignment, visibility, and opacity control are part of the current integration rather than future scope.
 
 ## Documentation Update Rule
 
@@ -460,4 +535,4 @@ Update this document when the consumed backend contract or verified desktop inte
 
 ## Last Updated
 
-2026-08-18
+2026-08-21

@@ -8,9 +8,9 @@ It is intentionally concise. Stable scope belongs in `ProjectSpecification.md`, 
 
 ## Current Phase
 
-**Phase 4 - Heatmap visualization milestone**
+**Phase 5 - Selectable multi-model desktop workflow**
 
-The current objective is to document, commit, and release the verified interactive heatmap-overlay workflow built on top of the initial desktop baseline.
+The current objective is to document, commit, publish, and release the locally verified model-discovery and model-selection workflow built on top of the existing image-analysis and heatmap client.
 
 ## Verified Environment
 
@@ -20,13 +20,15 @@ The current objective is to document, commit, and release the verified interacti
 - presentation pattern: MVVM with `CommunityToolkit.Mvvm`;
 - hosting and dependency injection: .NET Generic Host;
 - test framework: xUnit;
-- repository location is separate from the model and backend repositories;
-- the complete solution builds successfully in Debug and Release configurations;
-- all 49 automated tests pass;
-- the WPF application starts and performs an automatic backend health check;
-- the full desktop-to-backend-to-Python inference workflow has been verified locally;
-- required Base64 PNG heatmaps are transported, decoded, and displayed successfully;
-- the GitHub Actions Release build and test workflow completes successfully.
+- repository location is separate from the model, backend, and stack repositories;
+- the complete solution builds successfully in Release configuration;
+- all 60 automated tests pass;
+- the WPF application starts and performs automatic backend-health and model-catalog refreshes;
+- the full desktop-to-backend-to-Python multi-model workflow has been verified locally;
+- required Base64 PNG heatmaps are transported, decoded, aligned, and displayed successfully;
+- inference service `v0.6.0` and backend `v0.3.0` provide the compatible published service contracts.
+
+The desktop multi-model changes have not yet completed their own commit, push, CI, and release sequence. Local verification must not be confused with a published desktop release.
 
 ## Implemented
 
@@ -37,14 +39,13 @@ The current objective is to document, commit, and release the verified interacti
 - WPF application project created under `src`;
 - xUnit test project created under `tests`;
 - repository hygiene configured through `.gitignore`, `.gitattributes`, and `.editorconfig`;
-- initial README, specification, architecture, status, integration, and commit-guideline documents created;
-- initial feature baseline committed and pushed to the remote GitHub repository;
+- README, specification, architecture, status, integration, and commit-guideline documents created;
+- initial feature baseline committed and pushed to GitHub;
 - GitHub Actions CI configured for Windows, .NET 10, Release build, and automated tests;
 - CI, release, framework, UI, and platform badges added to the README;
 - repository made public;
 - initial desktop release `v0.1.0` published;
-- normal and anomalous screenshots stored under `docs/screenshots` and referenced from the README;
-- screenshots updated to show the verified heatmap overlay at 40 percent opacity.
+- normal and anomalous screenshots stored under `docs/screenshots` and referenced from the README.
 
 ### Application composition
 
@@ -52,53 +53,79 @@ The current objective is to document, commit, and release the verified interacti
 - dependency injection configured in `App.xaml.cs`;
 - strongly typed backend configuration bound from `appsettings.json`;
 - backend base address and timeout validation implemented;
-- typed HTTP clients registered for health and image analysis;
-- image preview and heatmap image loaders registered behind interfaces;
+- typed HTTP clients registered for health, model-catalog, and image-analysis services;
+- file-picker, image-preview, and heatmap-image services registered behind interfaces;
 - main window and view model resolved through dependency injection.
+
+### Model discovery and selection
+
+- `InferenceModel` introduced for model ID, display name, category, input size, and default state;
+- `InferenceModelCatalog` introduced for the available model collection and authoritative default ID;
+- model identities and catalog invariants validated before presentation;
+- `IInferenceModelCatalogService` introduced as the application-facing catalog boundary;
+- `BackendInferenceModelCatalogService` implemented for `GET /api/v1/models`;
+- backend catalog responses mapped through private transport types into application models;
+- available models exposed by `MainWindowViewModel` as an observable collection;
+- the backend-declared default selected after a successful catalog refresh;
+- manual model selection implemented in `MainWindow`;
+- explicit **Refresh models** command implemented;
+- analysis disabled when no model is selected;
+- selected stable model ID passed to the image-analysis service;
+- model display text remains separate from the routing identifier;
+- failed catalog loading clears stale model state and produces a user-facing status.
 
 ### User interface and MVVM workflow
 
 - centralized industrial dark-theme resources implemented for colors, typography, layout, and controls;
 - production main-window layout implemented;
 - backend liveness and inference readiness indicators implemented with semantic colors;
-- automatic health refresh implemented at application startup;
-- manual health refresh remains available;
-- image file selection supports PNG and JPEG files;
-- selected image path and preview are displayed;
-- preview loading releases the source file after reading;
+- automatic health and model-catalog refresh implemented at startup;
+- manual health and model-catalog refresh actions available;
+- model selector displays the available models and readable display names;
+- model-count status displayed;
+- ComboBox text contrast corrected for readable selected values;
+- PNG and JPEG image selection implemented;
+- selected image path and file-lock-free preview displayed;
 - analysis, busy, cancellation, and command-enabled states implemented;
-- analysis results display decision, score, threshold, model, category, processing time, and trace identifier;
-- normal decisions use success styling and anomalous decisions use danger styling;
-- source image and heatmap are aligned in the same display area;
-- heatmap visibility can be toggled;
-- heatmap opacity can be adjusted from 0 to 100 percent;
-- the default heatmap opacity is 40 percent;
+- results display decision, score, threshold, returned model, category, processing time, and trace ID;
+- source image and heatmap aligned in the same display area using `Uniform` scaling;
+- preview area enlarged while preserving the full image and heatmap alignment;
+- window height adjusted to make better use of the available preview space;
+- heatmap visibility and opacity controls implemented;
+- default heatmap opacity remains 40 percent;
 - heatmap presentation controls do not alter the backend result.
 
 ### Backend integration
 
 - `GET /health/live` client implemented;
 - `GET /health/ready` client implemented;
-- `POST /api/v1/analyses` multipart upload client implemented;
-- successful backend responses are mapped into validated desktop result and heatmap models;
-- the required `image/png` heatmap metadata and Base64 payload are validated;
-- Base64 heatmap data is decoded into an immutable WPF image source;
-- unsupported local file types and incomplete backend responses are rejected;
-- connection, timeout, cancellation, file, and response failures produce user-facing status messages;
-- the desktop communicates only with the ASP.NET Core backend and never directly with the Python service.
+- `GET /api/v1/models` client implemented;
+- `POST /api/v1/analyses` multipart client implemented;
+- selected `modelId` added to multipart analysis requests;
+- successful catalog responses mapped into validated inference models;
+- successful analysis responses mapped into validated result and heatmap models;
+- required `image/png` heatmap metadata and Base64 payload validated;
+- Base64 heatmaps decoded into immutable WPF image sources;
+- unsupported local file types and incomplete backend responses rejected;
+- connection, timeout, cancellation, file, catalog, and response failures produce user-facing status messages;
+- the desktop communicates only with the backend and never directly with Python.
 
 ### Verification
 
-- 49 automated tests cover configuration, health communication, multipart analysis requests, response mapping, constructor guards, heatmap validation and decoding, view-model state, image selection, preview handling, command availability, and error paths;
+- 60 automated tests cover configuration, health, catalog mapping, inference-model invariants, default and manual selection, multipart model forwarding, analysis mapping, heatmap validation and decoding, view-model state, command availability, and error paths;
 - Release build verified without errors;
-- normal Capsule image verified with score `1.848755` below threshold `2.501822`;
-- anomalous Capsule poke image verified with score `4.992109` above threshold `2.501822`;
-- model identifier `mvtec-ad-capsule-320`, category `capsule`, processing time, and trace identifier verified in the UI;
-- automatic startup health refresh and green ready indicators verified with the complete local stack;
-- `320 x 320` PNG heatmaps verified for normal and anomalous images;
-- overlay alignment verified at 0, 40, and 100 percent opacity;
-- heatmap visibility and opacity controls verified interactively;
-- updated normal and anomalous portfolio screenshots verified.
+- automatic startup health and model-catalog refresh verified with the complete local stack;
+- catalog display and manual model selection verified with four enabled registry entries;
+- `mvtec-ad-capsule-320` verified through the native desktop workflow;
+- `mvtec-ad-bottle-generalized-320` verified through the native desktop workflow;
+- `visa-candle-generalized-q95-320` verified through the native desktop workflow;
+- `visa-cashew-generalized-q95-320` verified through the native desktop workflow;
+- selected model IDs and returned model identities verified in the UI;
+- normal and anomalous decisions verified;
+- `320 x 320` PNG heatmaps verified across the workflow;
+- enlarged preview, full-image visibility, heatmap alignment, model-selector readability, visibility toggle, and opacity control verified interactively.
+
+The model checks verify discovery, explicit routing, response identity, and visualization integration. They do not constitute new category-specific model-quality benchmarks.
 
 ## Current Repository Shape
 
@@ -111,8 +138,14 @@ industrial-visual-anomaly-detection-desktop/
 |   `-- IndustrialVisualAnomalyDetection.Desktop/
 |       |-- Configuration/
 |       |-- Models/
+|       |   |-- Analysis/
+|       |   |-- Inference/
+|       |   `-- Status/
 |       |-- Resources/Styles/
 |       |-- Services/
+|       |   |-- Backend/
+|       |   |-- Files/
+|       |   `-- Images/
 |       |-- ViewModels/
 |       `-- Views/
 |-- tests/
@@ -120,8 +153,6 @@ industrial-visual-anomaly-detection-desktop/
 |       `-- Unit/
 |-- docs/
 |   |-- screenshots/
-|   |   |-- analysis-anomalous.png
-|   |   `-- analysis-normal.png
 |   |-- ApiIntegration.md
 |   |-- ArchitectureOverview.md
 |   |-- DevelopmentStatus.md
@@ -136,15 +167,16 @@ industrial-visual-anomaly-detection-desktop/
 
 ## Not Yet Implemented
 
+- automatic validation that a selected image belongs to the selected model category;
 - structured operational logging beyond Generic Host defaults;
 - detailed Problem Details parsing and presentation;
 - dedicated packaging or installer workflow;
 - certified defect segmentation or pixel-accurate masks;
-- generalized heatmap alignment for preprocessing pipelines that crop images or change their aspect ratio;
+- generalized heatmap alignment for preprocessing pipelines that crop or change aspect ratio;
 - analysis history or persistence;
 - batch analysis;
 - camera integration;
-- automated process orchestration for starting the backend and Python service.
+- automated process orchestration for starting backend and inference services.
 
 ## Current Decisions
 
@@ -153,23 +185,28 @@ industrial-visual-anomaly-detection-desktop/
 - MVVM separates presentation state from views.
 - `CommunityToolkit.Mvvm` provides observable state and commands.
 - The .NET Generic Host provides configuration, logging, and dependency injection.
-- The desktop application communicates only with the ASP.NET Core backend.
-- The backend remains authoritative for image validation and anomaly decisions.
+- The desktop communicates only with the ASP.NET Core backend.
+- Model identities and the default model are discovered through the backend rather than duplicated in desktop configuration.
+- The backend remains authoritative for model availability, image validation, and analysis results.
+- The selected model's stable ID is explicitly sent with every current desktop analysis request.
+- Model and image selection are independent; the operator must choose a compatible category.
 - Backend liveness and inference readiness remain distinct states.
 - The workflow processes one local image at a time.
 - The heatmap is a required part of the current analysis response.
 - Heatmap visibility and opacity are presentation-only settings.
 - The heatmap represents relative patch responses and is not presented as a certified segmentation mask.
-- The current overlay assumes that the source preview and returned heatmap share the same spatial extent and aspect ratio.
+- The current overlay assumes that source and heatmap share the same spatial extent and aspect ratio.
 
 ## Immediate Next Steps
 
-1. update the remaining desktop documentation for the heatmap contract and presentation workflow;
-2. run the complete Release build and 49-test verification sequence;
-3. inspect the final staged changes and repository status;
-4. commit and push the heatmap milestone;
-5. publish the next desktop release after CI succeeds;
-6. coordinate compatible model and backend releases for the completed full-stack heatmap contract.
+1. finish updating the remaining desktop documentation for selectable models;
+2. run the complete Release build and 60-test verification sequence again;
+3. run whitespace checks and inspect all tracked and untracked changes;
+4. stage and review the exact desktop milestone;
+5. commit and push the multi-model desktop changes;
+6. confirm that GitHub Actions CI succeeds;
+7. publish the next desktop release only after CI is green;
+8. update the Docker Compose stack to published model, backend, and desktop milestone references where applicable.
 
 ## Verification Commands
 
@@ -207,4 +244,4 @@ Update this document after a verified milestone or meaningful group of changes. 
 
 ## Last Updated
 
-2026-08-18
+2026-08-21
